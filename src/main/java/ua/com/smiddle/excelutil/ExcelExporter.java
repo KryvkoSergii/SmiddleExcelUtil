@@ -24,6 +24,8 @@ import java.util.stream.Collectors;
 public class ExcelExporter {
     private Map<Class, String> defaultTypePattern;
     private Map<Class, Short> defaultTypeFormat;
+    private Class[] customClassTypesRow;
+    private List<Short> customPatternRow;
     private Configurer configurer;
     private Workbook wb;
     private final SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd");
@@ -36,87 +38,15 @@ public class ExcelExporter {
     }
 
     //Methods
-
-//    public void exportAbonents(Collection<Abonent> abonentsList, Map<Integer, FieldMap> indexMapping, OutputStream os) throws Exception {
-//        Workbook wb = new HSSFWorkbook();
-//        String sheetName = "Реультат обзвона";
-//        String reportName = null;
-//        List<String[]> header = new ArrayList<>();
-//        List<String[]> tableHeader = new ArrayList<>();
-//
-//        Configurer configurer = Configurer.buildNewConfigurer();
-//        configurer.showReportName(true)
-//                .showReportDetails(true)
-//                .reportName("");
-//        /**
-//         * Contains headers of required abonent's data according to {@link FieldMap} of campaign.
-//         */
-//        List<String> importFields = indexMapping.entrySet().stream()
-//                .map(i -> i.getValue().getFieldImport())
-//                .collect(Collectors.toList());
-//        /**
-//         * container to store and transmit all useful data to excel render.
-//         * Contains abonent's data and results.
-//         */
-//        List<String[]> data = new ArrayList<>();
-//        /**
-//         * Mapping of - column index in excel and {@link FieldMap} of campaign.
-//         */
-//        Set<Map.Entry<Integer, FieldMap>> indexMappingSet = indexMapping.entrySet();
-//        int abonentMappingSize = indexMappingSet.size() - 1;
-//        /**
-//         * Max {@link ua.com.smiddle.SmiddleCampaignManager.core.model.ResultCode} column index counter in excel.
-//         * Used for dynamical excel building.
-//         */
-//        int indexResultCounter = abonentMappingSize;
-//        /**
-//         * Mapping of - {@link ua.com.smiddle.SmiddleCampaignManager.core.model.ResultCode} code and {@link Wrapper},
-//         * which contains name of {@link ua.com.smiddle.SmiddleCampaignManager.core.model.ResultCode} and it column index in excel.
-//         * Name of {@link ua.com.smiddle.SmiddleCampaignManager.core.model.ResultCode} will be used as column title in next.
-//         */
-//        Map<String, Wrapper> resultCodeColumnIndex = new HashMap<>();
-//        List<String> row;
-//        for (Abonent a : abonentsList) {
-//            row = new ArrayList<>();
-//            /**
-//             * Adding abonent's fields to temporary container {@code row}.
-//             */
-//            row.addAll(buildAbonentRow(indexMappingSet, a));
-//            /**
-//             * Adding results to temporary container {@code row}
-//             */
-//            indexResultCounter = appendResultRows(indexResultCounter, resultCodeColumnIndex, row, a);
-//            /**
-//             * converting to required data
-//             */
-//            data.add(row.toArray(new String[row.size()]));
-//        }
-//        /**
-//         * Processing and retrieving headers of table
-//         */
-//        List<String> resultTitles = resultCodeColumnIndex.entrySet().stream()
-//                .map(e -> e.getValue())
-//                .sorted(Comparator.comparing(Wrapper::getIndex))
-//                .map(e -> e.getName()).collect(Collectors.toList());
-//        importFields.addAll(resultTitles);
-//        tableHeader.add(importFields.toArray(new String[importFields.size()]));
-//        /**
-//         * rendering excel and writing to {@link OutputStream}
-//         */
-//        wb = useTemplate(wb, sheetName, reportName, header, tableHeader, data, 0, 0, false);
-//        wb.write(os);
-//    }
-
-
-    //============================Services methods==============================
-
-
-    public void bulidDocument(List<String[]> tableHeader, List<Object[]> data) throws Exception {
-        if (defaultTypeFormat == null)
-            throw new IllegalStateException("default type format are not initialized");
-        Workbook wb = new HSSFWorkbook();
+    public void buildDocument(List<Object[]> tableHeader, List<Object[]> data) throws Exception {
+        if (defaultTypePattern == null)
+            throw new IllegalStateException("default type pattern are not initialized");
         validateConfigurer(configurer);
-        validateTableHeadersSize(tableHeader,data,configurer);
+        validateTableHeadersSize(tableHeader, data, configurer);
+        this.wb = new HSSFWorkbook();
+        this.defaultTypeFormat = convertPatternToFormat(defaultTypePattern);
+        this.customClassTypesRow = configurer.getCustomClassTypesRow();
+        this.customPatternRow = buildCustomCellFormatter(configurer.getCustomPatternRow());
         this.wb = useTemplate(wb, configurer.getSheetName(), configurer.getReportName(), configurer.getReportDetails(),
                 tableHeader, data, configurer.getReportDateFrom(), configurer.getReportDateTo(), configurer.isShowReportDate());
     }
@@ -124,6 +54,8 @@ public class ExcelExporter {
     public void writeDocument(OutputStream targetStream) throws IOException {
         wb.write(targetStream);
     }
+
+    //=================private methods============================
 
     /**
      * validation of {@link Configurer} before build an document
@@ -142,12 +74,13 @@ public class ExcelExporter {
 
     /**
      * validate table headers, data and related date before build an document
+     *
      * @param tableHeader
      * @param data
      * @param conf
      * @throws SEUDataValidationException
      */
-    private void validateTableHeadersSize(List<String[]> tableHeader, List<Object[]> data, Configurer conf) throws SEUDataValidationException {
+    private void validateTableHeadersSize(List<Object[]> tableHeader, List<Object[]> data, Configurer conf) throws SEUDataValidationException {
         if (tableHeader == null)
             throw new SEUDataValidationException("tableHeader is not set");
         if (data == null)
@@ -163,16 +96,167 @@ public class ExcelExporter {
                     " not equal customPatternRow=" + conf.getCustomPatternRow().length);
     }
 
-    private Map<Integer, Short> buildCustomCellFormatter(List<String> pattersList) {
+    @Deprecated
+    private Map<Integer, Short> buildCustomCellFormatterMap(String[] pattersList) {
         final AtomicInteger i = new AtomicInteger(0);
         final CreationHelper createHelper = wb.getCreationHelper();
-        Map<Integer, Short> format = pattersList.stream()
+        Map<Integer, Short> format = Arrays.asList(pattersList).stream()
                 .collect(Collectors.toMap(e -> i.getAndIncrement(), e -> createHelper.createDataFormat().getFormat(e)));
         return format;
     }
 
-    private Workbook useTemplate(Workbook wb, String sheetName, String reportName, List<String[]> header,
-                                 List<String[]> tableHeader, List<Object[]> data, long dateFrom, long dateTo, boolean dateRequired) {
+    private List<Short> buildCustomCellFormatter(String[] pattersList) {
+        if (pattersList == null) return null;
+        final CreationHelper createHelper = wb.getCreationHelper();
+        List<Short> format = Arrays.asList(pattersList).stream()
+                .map(e -> createHelper.createDataFormat().getFormat(e))
+                .collect(Collectors.toList());
+        return format;
+    }
+
+    private Sheet appendData(Sheet sheet, List<Object[]> rows, int leftOffset, int beginRow, CellStyle style,
+                             CellStyle upper, CellStyle lower, CellStyle firstColumn, CellStyle[] rowStyle) {
+        Row target;
+        Object[] source;
+        Cell cell;
+        for (int i = 0; i < rows.size(); i++) {
+            source = rows.get(i);
+            target = sheet.createRow(beginRow++);
+            for (int j = 0; j < source.length; j++) {
+                Object cellValue = source[j];
+                cell = target.createCell(leftOffset + j);
+                // присвоение стиля
+                if (style != null) cell.setCellStyle(style);
+                if (style == null && rowStyle != null)
+                    cell.setCellStyle(rowStyle[j]);
+                //хедера и футера
+                if (i == 0)
+                    if (upper != null)
+                        cell.setCellStyle(upper);
+                if (i == rows.size() - 1)
+                    if (lower != null)
+                        cell.setCellStyle(lower);
+                //присвоить стиль первой колонке
+                if (j == 1)
+                    if (firstColumn != null)
+                        cell.setCellStyle(firstColumn);
+                /** set value into cell */
+                Class classType = customClassTypesRow != null ? customClassTypesRow[j] : null;
+                Short pattern = customPatternRow != null ? customPatternRow.get(j) : null;
+                setValueAndCellFormat(cell, cellValue, pattern, classType);
+            }
+
+        }
+        return sheet;
+    }
+
+    private Map<Class, Short> convertPatternToFormat(Map<Class, String> typePatterns) {
+        final CreationHelper createHelper = wb.getCreationHelper();
+        Map<Class, Short> formats = typePatterns.entrySet().stream()
+                .collect(Collectors.toMap(k -> k.getKey(), v -> createHelper.createDataFormat().getFormat(v.getValue())));
+        return formats;
+    }
+
+    private Cell setValueAndCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType) {
+        /** set blank value to cell */
+        if (value == null) {
+            cell.setCellType(Cell.CELL_TYPE_BLANK);
+            return cell;
+        }
+        cell = setCellTypeAndCellValueByValueType(cell, value);
+        /** no predefinedClassType */
+        if (predefinedClassType == null)
+            return setCellFormat(cell, value, cellFormat, value.getClass());
+        return setCellFormat(cell, value, cellFormat, predefinedClassType);
+    }
+
+    private Cell setCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType) {
+        if (predefinedClassType == null)
+            throw new IllegalArgumentException("Predefined class type is not set");
+        if (predefinedClassType != value.getClass())
+            try {
+                predefinedClassType.cast(value);
+            } catch (ClassCastException e) {
+                throw new IllegalArgumentException("Class type conflict " + predefinedClassType.getClass().getTypeName()
+                        + " is not" + value.getClass().getTypeName());
+            }
+        Short format;
+        /** use default cell format */
+        if (cellFormat == null) format = defaultTypeFormat.get(predefinedClassType);
+        /** use custom cell format */
+        else format = cellFormat;
+        cell.getCellStyle().setDataFormat(format);
+        return cell;
+    }
+
+    /**
+     * Method defines {@code value} classType and set cellType it to {@code cell}.
+     *
+     * @param cell  target cell, is type should be set
+     * @param value object value, type of should be defined
+     * @return target cell with type
+     * @throws IllegalArgumentException type of {@code value} not supported.
+     */
+    private Cell setCellTypeAndCellValueByValueType(Cell cell, Object value) throws IllegalArgumentException {
+        switch (value.getClass().getSimpleName()) {
+            case "Long": {
+                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
+                cell.setCellValue((Long) value);
+                break;
+            }
+            case "Integer": {
+                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
+                cell.setCellValue((Integer) value);
+                break;
+            }
+            case "Short": {
+                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
+                cell.setCellValue((Byte) value);
+                break;
+            }
+            case "Byte": {
+                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
+                cell.setCellValue((Byte) value);
+                break;
+            }
+            case "Double": {
+                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
+                cell.setCellValue((Double) value);
+                break;
+            }
+            case "Float": {
+                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
+                cell.setCellValue((Float) value);
+                break;
+            }
+            case "Boolean": {
+                cell.setCellType(Cell.CELL_TYPE_BOOLEAN);
+                cell.setCellValue((Boolean) value);
+                break;
+            }
+            case "String": {
+                cell.setCellType(Cell.CELL_TYPE_STRING);
+                cell.setCellValue((String) value);
+                break;
+            }
+            case "Character": {
+                cell.setCellType(Cell.CELL_TYPE_STRING);
+                cell.setCellValue((String) value);
+                break;
+            }
+            case "Date": {
+                cell.setCellValue((Date) value);
+                break;
+            }
+            default:
+                throw new IllegalArgumentException("Unsupported object value type");
+        }
+        return cell;
+    }
+
+
+    private Workbook useTemplate(Workbook wb, String sheetName, String reportName, List<Object[]> header,
+                                 List<Object[]> tableHeader, List<Object[]> data, long dateFrom, long dateTo, boolean dateRequired) {
         if (wb == null)
             throw new IllegalStateException("Workbook is not set");
         //Create new workbook and sheet
@@ -181,11 +265,12 @@ public class ExcelExporter {
         //оглавление стилей
         CellStyle styleHeader = getHeaderStyle(wb);
         CellStyle tableHeaderStyle = getTableHeaderStyle(wb);
-        CellStyle tableStyle = getTableStyle(wb);
+        CellStyle[] tableStyle = getTableStyles(wb, tableHeader.get(0).length);
         CellStyle generalHeaderStyle = getGeneralHeaderStyle(wb);
         CellStyle firstColumnStyle = getFirstColumnStyle(wb);
         //Определение границ
         short[] cellPosHeader = getMaxWidth(header);
+
 
         if (tableHeader != null) {
             short[] cellPosTable = getMaxWidth(tableHeader);
@@ -206,7 +291,7 @@ public class ExcelExporter {
             }
         }
         //отрисовка заголовка
-        if (reportName != null) {
+        if (configurer.isShowReportName() && reportName != null) {
             rowNumber++;
             row = sheet.createRow(rowNumber++);
             cell = row.createCell(1);
@@ -220,7 +305,7 @@ public class ExcelExporter {
             rowNumber++;
         }
         if (header != null && !header.isEmpty()) {
-            sheet = appendData(sheet, header, offset, rowNumber, null, null, null, firstColumnStyle);
+            sheet = appendData(sheet, header, offset, rowNumber, null, null, null, firstColumnStyle, null);
             rowNumber = sheet.getLastRowNum();
             rowNumber++;
         }
@@ -236,13 +321,13 @@ public class ExcelExporter {
             rowNumber++;
         }
         if (tableHeader != null) {
-            sheet = appendData(sheet, tableHeader, 0, rowNumber, tableHeaderStyle, null, null, null);
+            sheet = appendData(sheet, tableHeader, 0, rowNumber, tableHeaderStyle, null, null, null, null);
             rowNumber = sheet.getLastRowNum();
             rowNumber++;
             sheet.createFreezePane(cellPosHeader[1], rowNumber);
         }
         if (data != null) {
-            appendData(sheet, data, 0, rowNumber, tableStyle, null, null, null);
+            appendData(sheet, data, 0, rowNumber, null, null, null, null, tableStyle);
             rowNumber = sheet.getLastRowNum();
         }
         //установка автоматического размера
@@ -310,13 +395,18 @@ public class ExcelExporter {
         return style;
     }
 
-    private CellStyle getTableStyle(Workbook wb) {
-        CellStyle styleThin = wb.createCellStyle();
-        styleThin.setBorderTop(CellStyle.BORDER_THIN);
-        styleThin.setBorderBottom(CellStyle.BORDER_THIN);
-        styleThin.setBorderLeft(CellStyle.BORDER_THIN);
-        styleThin.setBorderRight(CellStyle.BORDER_THIN);
-        return styleThin;
+    private CellStyle[] getTableStyles(Workbook wb, int columnNumber) {
+        CellStyle[] array = new CellStyle[columnNumber];
+        CellStyle styleThin;
+        for (int i = 0; i < array.length; i++) {
+            styleThin = wb.createCellStyle();
+            styleThin.setBorderTop(CellStyle.BORDER_THIN);
+            styleThin.setBorderBottom(CellStyle.BORDER_THIN);
+            styleThin.setBorderLeft(CellStyle.BORDER_THIN);
+            styleThin.setBorderRight(CellStyle.BORDER_THIN);
+            array[i] = styleThin;
+        }
+        return array;
     }
 
     private CellStyle getHeaderLowerStyle(Workbook wb) {
@@ -359,154 +449,16 @@ public class ExcelExporter {
         return result;
     }
 
-    private short[] getMaxWidth(List<String[]> rows) {
+    private short[] getMaxWidth(List<Object[]> rows) {
         short[] result = new short[2];
         result[0] = 0;
-        String[] row;
+        Object[] row;
         for (int i = 0; i < rows.size(); i++) {
             row = rows.get(i);
             if (i == 0) result[1] = (short) row.length;
             if (result[1] < (short) row.length) result[1] = (short) row.length;
         }
         return result;
-    }
-
-    private Sheet appendData(Sheet sheet, List<Object[]> rows, int leftOffset, int beginRow, CellStyle style,
-                             CellStyle upper, CellStyle lower, CellStyle firstColumn) {
-        Row target;
-        Object[] source;
-        Cell cell;
-        for (int i = 0; i < rows.size(); i++) {
-            source = rows.get(i);
-            target = sheet.createRow(beginRow++);
-            for (int j = 0; j < source.length; j++) {
-                Object cellValue = source[j];
-                cell = target.createCell(leftOffset + j);
-                // присвоение стиля
-                if (style != null) cell.setCellStyle(style);
-                //хедера и футера
-                if (i == 0)
-                    if (upper != null)
-                        cell.setCellStyle(upper);
-                if (i == rows.size() - 1)
-                    if (lower != null)
-                        cell.setCellStyle(lower);
-                //присвоить стиль первой колонке
-                if (j == 1)
-                    if (firstColumn != null)
-                        cell.setCellStyle(firstColumn);
-                /** set value into cell */
-                cell = setValueAndCellFormat(cell, cellValue);
-            }
-
-        }
-        return sheet;
-    }
-
-    private Map<Class, Short> convertPatternToFormat(Map<Class, String> typePatterns) {
-        final CreationHelper createHelper = wb.getCreationHelper();
-        Map<Class, Short> formats = typePatterns.entrySet().stream()
-                .collect(Collectors.toMap(k -> k.getKey(), v -> createHelper.createDataFormat().getFormat(v.getValue())));
-        return formats;
-    }
-
-    private Cell setValueAndCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType) {
-        /** set blank value to cell */
-        if (value == null) {
-            cell.setCellType(Cell.CELL_TYPE_BLANK);
-            return cell;
-        }
-
-        cell = setCellTypeAndCellValueByValueType(cell, value);
-
-        /** no predefinedClassType */
-        if (predefinedClassType == null)
-            return setCellFormat(cell, value, cellFormat, value.getClass());
-        return setCellFormat(cell, value, cellFormat, predefinedClassType);
-    }
-
-    private Cell setCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType) {
-        if (predefinedClassType == null)
-            throw new IllegalArgumentException("Predefined class type is not set");
-        if (predefinedClassType.getClass() != value.getClass())
-            try {
-                predefinedClassType.cast(value);
-            } catch (ClassCastException e) {
-                throw new IllegalArgumentException("Class type conflict " + predefinedClassType.getClass().getTypeName()
-                        + " is not" + value.getClass().getTypeName());
-            }
-        Short format;
-        /** use default cell format */
-        if (cellFormat == null) format = defaultTypeFormat.get(predefinedClassType.getClass());
-        /** use custom cell format */
-        else format = cellFormat;
-        cell.getCellStyle().setDataFormat(format);
-        return cell;
-    }
-
-    /**
-     * Method defines {@code value} classType and set cellType it to {@code cell}.
-     *
-     * @param cell  target cell, is type should be set
-     * @param value object value, type of should be defined
-     * @return target cell with type
-     * @throws IllegalArgumentException type of {@code value} not supported.
-     */
-    private Cell setCellTypeAndCellValueByValueType(Cell cell, Object value) throws IllegalArgumentException {
-        switch (value.getClass().getSimpleName()) {
-            case "Long": {
-                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
-                cell.setCellValue((Long) value);
-                break;
-            }
-            case "Integer": {
-                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
-                cell.setCellValue((Integer) value);
-                break;
-            }
-            case "Short": {
-                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
-                cell.setCellValue((Byte) value);
-                break;
-            }
-            case "Byte": {
-                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
-                cell.setCellValue((Byte) value);
-                break;
-            }
-            case "Double": {
-                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
-                cell.setCellValue((Double) value);
-                break;
-            }
-            case "Float": {
-                cell.setCellType(Cell.CELL_TYPE_NUMERIC);
-                cell.setCellValue((Float) value);
-                break;
-            }
-            case "Boolean": {
-                cell.setCellType(Cell.CELL_TYPE_BOOLEAN);
-                cell.setCellValue((Boolean) value);
-                break;
-            }
-            case "String": {
-                cell.setCellType(Cell.CELL_TYPE_STRING);
-                cell.setCellValue((String) value);
-                break;
-            }
-            case "Character": {
-                cell.setCellType(Cell.CELL_TYPE_STRING);
-                cell.setCellValue((String) value);
-                break;
-            }
-            case "Date": {
-                /** doesn't have self type, formatter should be set */
-                break;
-            }
-            default:
-                throw new IllegalArgumentException("Unsupported object value type");
-        }
-        return cell;
     }
 
 

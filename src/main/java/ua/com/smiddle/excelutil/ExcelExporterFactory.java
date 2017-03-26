@@ -16,9 +16,10 @@ public class ExcelExporterFactory {
         defaultTypeFormat.put(Long.class, "#");
         defaultTypeFormat.put(Short.class, "#");
         defaultTypeFormat.put(Byte.class, "#");
-        defaultTypeFormat.put(Double.class, "#.##");
-        defaultTypeFormat.put(Float.class, "#.##");
-        defaultTypeFormat.put(Date.class, "dd/mm/yyyy");
+        defaultTypeFormat.put(Double.class, "0.00");
+        defaultTypeFormat.put(Float.class, "0.00");
+        defaultTypeFormat.put(Date.class, "dd-MM-yyyy");
+        defaultTypeFormat.put(String.class, "@");
     }
 
     public static ExcelExporter buildNewInstance() {

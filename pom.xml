@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>ua.com.smiddle</groupId>
-    <artifactId>ExcelUtils</artifactId>
+    <artifactId>SmiddleExcelUtils</artifactId>
     <version>1.0</version>
 
     <properties>
@@ -62,6 +62,12 @@
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml-schemas</artifactId>
             <version>${project.apache.poi}</version>
+        </dependency>
+        <dependency>
+            <scope>test</scope>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>RELEASE</version>
         </dependency>
     </dependencies>
 </project>

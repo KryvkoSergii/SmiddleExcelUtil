@@ -13,7 +13,7 @@ public class Configurer {
     private long reportDateFrom;
     private long reportDateTo;
     private String reportName;
-    private List<String[]> reportDetails;
+    private List<Object[]> reportDetails;
     private String sheetName;
     private Class[] customClassTypesRow;
     private String[] customPatternRow;
@@ -24,7 +24,7 @@ public class Configurer {
     }
 
     private Configurer(boolean showReportName, boolean showReportDetails, boolean showReportDate, String reportName,
-                       List<String[]> reportDetails, String sheetName, long reportDateFrom, long reportDateTo,
+                       List<Object[]> reportDetails, String sheetName, long reportDateFrom, long reportDateTo,
                        Class[] customClassTypesRow, String[] customPatternRow) {
         this.showReportName = showReportName;
         this.showReportDetails = showReportDetails;
@@ -66,7 +66,7 @@ public class Configurer {
         return this;
     }
 
-    public Configurer reportDetails(List<String[]> reportDetails) {
+    public Configurer reportDetails(List<Object[]> reportDetails) {
         this.showReportDetails = true;
         this.reportDetails = reportDetails;
         return this;
@@ -121,7 +121,7 @@ public class Configurer {
         return reportName;
     }
 
-    public List<String[]> getReportDetails() {
+    public List<Object[]> getReportDetails() {
         return reportDetails;
     }
 
