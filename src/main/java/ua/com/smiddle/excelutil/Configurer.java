@@ -1,5 +1,8 @@
 package ua.com.smiddle.excelutil;
 
+import ua.com.smiddle.excelutil.model.CellStylePolicy;
+import ua.com.smiddle.excelutil.model.ExceptionProcessingPolicy;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,6 +20,8 @@ public class Configurer {
     private String sheetName;
     private Class[] customClassTypesRow;
     private String[] customPatternRow;
+    private ExceptionProcessingPolicy exceptionProcessingPolicy;
+    private CellStylePolicy cellStylePolicy;
 
 
     //Constructors
@@ -25,7 +30,8 @@ public class Configurer {
 
     private Configurer(boolean showReportName, boolean showReportDetails, boolean showReportDate, String reportName,
                        List<Object[]> reportDetails, String sheetName, long reportDateFrom, long reportDateTo,
-                       Class[] customClassTypesRow, String[] customPatternRow) {
+                       Class[] customClassTypesRow, String[] customPatternRow, ExceptionProcessingPolicy exceptionProcessingPolicy
+            , CellStylePolicy cellStylePolicy) {
         this.showReportName = showReportName;
         this.showReportDetails = showReportDetails;
         this.showReportDate = showReportDate;
@@ -36,13 +42,16 @@ public class Configurer {
         this.reportDateTo = reportDateTo;
         this.customClassTypesRow = customClassTypesRow;
         this.customPatternRow = customPatternRow;
+        this.exceptionProcessingPolicy = exceptionProcessingPolicy;
+        this.cellStylePolicy = cellStylePolicy;
     }
 
 
     //Methods
     public static Configurer buildNewConfigurer() {
         return new Configurer(false, false, false, "REPORT",
-                new ArrayList<>(), "Sheet1", 0L, 0L, null, null);
+                new ArrayList<>(), "Sheet1", 0L, 0L, null, null,
+                ExceptionProcessingPolicy.WRITE_EXCEPTION_TO_CELL, CellStylePolicy.COLUMN);
     }
 
     public Configurer showReportName(boolean showReportName) {
@@ -95,6 +104,24 @@ public class Configurer {
     public Configurer customPatternRow(String[] customPatternRow) {
         this.customPatternRow = customPatternRow;
         return this;
+    }
+
+    public Configurer exceptionProcessingPolicy(ExceptionProcessingPolicy exceptionProcessingPolicy) {
+        this.exceptionProcessingPolicy = exceptionProcessingPolicy;
+        return this;
+    }
+
+    public Configurer cellStylePolicy(CellStylePolicy stylePolicy) {
+        this.cellStylePolicy = stylePolicy;
+        return this;
+    }
+
+    public ExceptionProcessingPolicy getExceptionProcessingPolicy() {
+        return exceptionProcessingPolicy;
+    }
+
+    public CellStylePolicy getCellStylePolicy() {
+        return cellStylePolicy;
     }
 
     public long getReportDateTo() {

@@ -6,13 +6,15 @@ import org.apache.poi.hssf.util.HSSFColor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
-import ua.com.smiddle.excelutil.exception.SEUConfigurerValidationException;
-import ua.com.smiddle.excelutil.exception.SEUDataValidationException;
+import ua.com.smiddle.excelutil.exception.*;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -115,7 +117,7 @@ public class ExcelExporter {
     }
 
     private Sheet appendData(Sheet sheet, List<Object[]> rows, int leftOffset, int beginRow, CellStyle style,
-                             CellStyle upper, CellStyle lower, CellStyle firstColumn, CellStyle[] rowStyle) {
+                             CellStyle upper, CellStyle lower, CellStyle firstColumn, CellStyle[] rowStyle, boolean enableCustomPatterns) throws Exception {
         Row target;
         Object[] source;
         Cell cell;
@@ -125,29 +127,58 @@ public class ExcelExporter {
             for (int j = 0; j < source.length; j++) {
                 Object cellValue = source[j];
                 cell = target.createCell(leftOffset + j);
-                // присвоение стиля
-                if (style != null) cell.setCellStyle(style);
-                if (style == null && rowStyle != null)
-                    cell.setCellStyle(rowStyle[j]);
-                //хедера и футера
-                if (i == 0)
-                    if (upper != null)
-                        cell.setCellStyle(upper);
-                if (i == rows.size() - 1)
-                    if (lower != null)
-                        cell.setCellStyle(lower);
-                //присвоить стиль первой колонке
-                if (j == 1)
-                    if (firstColumn != null)
-                        cell.setCellStyle(firstColumn);
+                resolveCellStyle(rows, style, upper, lower, firstColumn, rowStyle, cell, i, j);
                 /** set value into cell */
                 Class classType = customClassTypesRow != null ? customClassTypesRow[j] : null;
                 Short pattern = customPatternRow != null ? customPatternRow.get(j) : null;
-                setValueAndCellFormat(cell, cellValue, pattern, classType);
+                setValueAndCellFormat(cell, cellValue, pattern, classType, enableCustomPatterns);
             }
 
         }
         return sheet;
+    }
+
+    private void resolveCellStyle(List<Object[]> rows, CellStyle style, CellStyle upper, CellStyle lower, CellStyle firstColumn, CellStyle[] rowStyle, Cell cell, int i, int j) throws SEUConfigurerException {
+        /** only for headers and table headers */
+        if (style != null) cell.setCellStyle(style);
+        else
+            switch (configurer.getCellStylePolicy()) {
+                case CELL_INDIVIDUALLY: {
+                    cell.setCellStyle(getTableStyles(wb));
+                    break;
+                }
+                case COLUMN: {
+                    cell.setCellStyle(rowStyle[j]);
+                    break;
+                }
+                default:
+                    throw new SEUConfigurerException("Unable define cell style policy");
+            }
+        if (i == 0)
+            if (upper != null)
+                cell.setCellStyle(upper);
+        if (i == rows.size() - 1)
+            if (lower != null)
+                cell.setCellStyle(lower);
+        if (j == 1)
+            if (firstColumn != null)
+                cell.setCellStyle(firstColumn);
+
+//        // присвоение стиля
+//        if (style != null) cell.setCellStyle(style);
+//        if (style == null && rowStyle != null)
+//            cell.setCellStyle(rowStyle[j]);
+//        //хедера и футера
+//        if (i == 0)
+//            if (upper != null)
+//                cell.setCellStyle(upper);
+//        if (i == rows.size() - 1)
+//            if (lower != null)
+//                cell.setCellStyle(lower);
+//        //присвоить стиль первой колонке
+//        if (j == 1)
+//            if (firstColumn != null)
+//                cell.setCellStyle(firstColumn);
     }
 
     private Map<Class, Short> convertPatternToFormat(Map<Class, String> typePatterns) {
@@ -157,7 +188,7 @@ public class ExcelExporter {
         return formats;
     }
 
-    private Cell setValueAndCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType) {
+    private Cell setValueAndCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType, boolean enableCustomPatterns) throws Exception {
         /** set blank value to cell */
         if (value == null) {
             cell.setCellType(Cell.CELL_TYPE_BLANK);
@@ -165,20 +196,19 @@ public class ExcelExporter {
         }
         cell = setCellTypeAndCellValueByValueType(cell, value);
         /** no predefinedClassType */
-        if (predefinedClassType == null)
+        if (predefinedClassType == null || !enableCustomPatterns)
             return setCellFormat(cell, value, cellFormat, value.getClass());
         return setCellFormat(cell, value, cellFormat, predefinedClassType);
     }
 
-    private Cell setCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType) {
+    private Cell setCellFormat(Cell cell, Object value, Short cellFormat, Class predefinedClassType) throws Exception {
         if (predefinedClassType == null)
-            throw new IllegalArgumentException("Predefined class type is not set");
+            processException(cell, "Predefined class type is not set");
         if (predefinedClassType != value.getClass())
             try {
                 predefinedClassType.cast(value);
             } catch (ClassCastException e) {
-                throw new IllegalArgumentException("Class type conflict " + predefinedClassType.getClass().getTypeName()
-                        + " is not" + value.getClass().getTypeName());
+                    processException(cell, e.getMessage());
             }
         Short format;
         /** use default cell format */
@@ -189,6 +219,7 @@ public class ExcelExporter {
         return cell;
     }
 
+
     /**
      * Method defines {@code value} classType and set cellType it to {@code cell}.
      *
@@ -197,7 +228,7 @@ public class ExcelExporter {
      * @return target cell with type
      * @throws IllegalArgumentException type of {@code value} not supported.
      */
-    private Cell setCellTypeAndCellValueByValueType(Cell cell, Object value) throws IllegalArgumentException {
+    private Cell setCellTypeAndCellValueByValueType(Cell cell, Object value) throws SEUException {
         switch (value.getClass().getSimpleName()) {
             case "Long": {
                 cell.setCellType(Cell.CELL_TYPE_NUMERIC);
@@ -249,14 +280,13 @@ public class ExcelExporter {
                 break;
             }
             default:
-                throw new IllegalArgumentException("Unsupported object value type");
+                processException(cell, "Unsupported object value type");
         }
         return cell;
     }
 
-
     private Workbook useTemplate(Workbook wb, String sheetName, String reportName, List<Object[]> header,
-                                 List<Object[]> tableHeader, List<Object[]> data, long dateFrom, long dateTo, boolean dateRequired) {
+                                 List<Object[]> tableHeader, List<Object[]> data, long dateFrom, long dateTo, boolean dateRequired) throws Exception {
         if (wb == null)
             throw new IllegalStateException("Workbook is not set");
         //Create new workbook and sheet
@@ -270,7 +300,6 @@ public class ExcelExporter {
         CellStyle firstColumnStyle = getFirstColumnStyle(wb);
         //Определение границ
         short[] cellPosHeader = getMaxWidth(header);
-
 
         if (tableHeader != null) {
             short[] cellPosTable = getMaxWidth(tableHeader);
@@ -305,7 +334,7 @@ public class ExcelExporter {
             rowNumber++;
         }
         if (header != null && !header.isEmpty()) {
-            sheet = appendData(sheet, header, offset, rowNumber, null, null, null, firstColumnStyle, null);
+            sheet = appendData(sheet, header, offset, rowNumber, null, null, null, firstColumnStyle, null, false);
             rowNumber = sheet.getLastRowNum();
             rowNumber++;
         }
@@ -321,19 +350,42 @@ public class ExcelExporter {
             rowNumber++;
         }
         if (tableHeader != null) {
-            sheet = appendData(sheet, tableHeader, 0, rowNumber, tableHeaderStyle, null, null, null, null);
+            sheet = appendData(sheet, tableHeader, 0, rowNumber, tableHeaderStyle, null, null, null, null, false);
             rowNumber = sheet.getLastRowNum();
             rowNumber++;
             sheet.createFreezePane(cellPosHeader[1], rowNumber);
         }
         if (data != null) {
-            appendData(sheet, data, 0, rowNumber, null, null, null, null, tableStyle);
+            appendData(sheet, data, 0, rowNumber, null, null, null, null, tableStyle, true);
             rowNumber = sheet.getLastRowNum();
         }
         //установка автоматического размера
         for (int i = 0; i < cellPosHeader[1]; i++)
             sheet.autoSizeColumn(i);
         return wb;
+    }
+
+    /**
+     * Process exception occurred during preparing table data. Method resolves throw an Exception
+     * or write it to cell.
+     *
+     * @param cell    target cell
+     * @param message exception message
+     * @throws SEUException
+     */
+    private void processException(Cell cell, String message) throws SEUException {
+        switch (configurer.getExceptionProcessingPolicy()) {
+            case THROW_EXCEPTION: {
+                throw new SEUDataTypeException(message);
+            }
+            case WRITE_EXCEPTION_TO_CELL: {
+                cell.setCellType(Cell.CELL_TYPE_ERROR);
+                cell.setCellValue(message);
+                break;
+            }
+            default:
+                throw new SEUConfigurerException("Unable resolve exception processing policy");
+        }
     }
 
     /**
@@ -407,6 +459,15 @@ public class ExcelExporter {
             array[i] = styleThin;
         }
         return array;
+    }
+
+    private CellStyle getTableStyles(Workbook wb) {
+        CellStyle styleThin = wb.createCellStyle();
+        styleThin.setBorderTop(CellStyle.BORDER_THIN);
+        styleThin.setBorderBottom(CellStyle.BORDER_THIN);
+        styleThin.setBorderLeft(CellStyle.BORDER_THIN);
+        styleThin.setBorderRight(CellStyle.BORDER_THIN);
+        return styleThin;
     }
 
     private CellStyle getHeaderLowerStyle(Workbook wb) {
