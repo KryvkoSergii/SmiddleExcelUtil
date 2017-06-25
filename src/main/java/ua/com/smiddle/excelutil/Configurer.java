@@ -22,6 +22,7 @@ public class Configurer {
     private String[] customPatternRow;
     private ExceptionProcessingPolicy exceptionProcessingPolicy;
     private CellStylePolicy cellStylePolicy;
+    private int columnIndexOfFreezeArea;
 
 
     //Constructors
@@ -31,7 +32,7 @@ public class Configurer {
     private Configurer(boolean showReportName, boolean showReportDetails, boolean showReportDate, String reportName,
                        List<Object[]> reportDetails, String sheetName, long reportDateFrom, long reportDateTo,
                        Class[] customClassTypesRow, String[] customPatternRow, ExceptionProcessingPolicy exceptionProcessingPolicy
-            , CellStylePolicy cellStylePolicy) {
+            , CellStylePolicy cellStylePolicy,int columnIndexOfFreezeArea) {
         this.showReportName = showReportName;
         this.showReportDetails = showReportDetails;
         this.showReportDate = showReportDate;
@@ -44,6 +45,7 @@ public class Configurer {
         this.customPatternRow = customPatternRow;
         this.exceptionProcessingPolicy = exceptionProcessingPolicy;
         this.cellStylePolicy = cellStylePolicy;
+        this.columnIndexOfFreezeArea = columnIndexOfFreezeArea;
     }
 
 
@@ -51,7 +53,7 @@ public class Configurer {
     public static Configurer buildNewConfigurer() {
         return new Configurer(false, false, false, "REPORT",
                 new ArrayList<>(), "Sheet1", 0L, 0L, null, null,
-                ExceptionProcessingPolicy.WRITE_EXCEPTION_TO_CELL, CellStylePolicy.COLUMN);
+                ExceptionProcessingPolicy.WRITE_EXCEPTION_TO_CELL, CellStylePolicy.COLUMN,0);
     }
 
     public Configurer showReportName(boolean showReportName) {
@@ -116,6 +118,12 @@ public class Configurer {
         return this;
     }
 
+    public Configurer columnIndexOfFreezeArea(int columnIndexOfFreezeArea) {
+        this.columnIndexOfFreezeArea = columnIndexOfFreezeArea;
+        return this;
+    }
+
+
     public ExceptionProcessingPolicy getExceptionProcessingPolicy() {
         return exceptionProcessingPolicy;
     }
@@ -162,6 +170,10 @@ public class Configurer {
 
     public String[] getCustomPatternRow() {
         return customPatternRow;
+    }
+
+    public int getColumnIndexOfFreezeArea() {
+        return columnIndexOfFreezeArea;
     }
 
     public Configurer getConfigurer() {

@@ -87,7 +87,7 @@ public class ExcelExporter {
             throw new SEUDataValidationException("tableHeader is not set");
         if (data == null)
             throw new SEUDataValidationException("data is not set");
-        if (tableHeader.get(0).length != data.get(0).length)
+        if (!data.isEmpty()&&(tableHeader.get(0).length != data.get(0).length))
             throw new SEUDataValidationException("Size of tableHeader[0]=" + tableHeader.get(0).length +
                     " not equal data[0]=" + data.get(0).length);
         if (conf.getCustomClassTypesRow() != null && tableHeader.get(0).length != conf.getCustomClassTypesRow().length)
@@ -208,7 +208,7 @@ public class ExcelExporter {
             try {
                 predefinedClassType.cast(value);
             } catch (ClassCastException e) {
-                    processException(cell, e.getMessage());
+                processException(cell, e.getMessage());
             }
         Short format;
         /** use default cell format */
@@ -353,7 +353,10 @@ public class ExcelExporter {
             sheet = appendData(sheet, tableHeader, 0, rowNumber, tableHeaderStyle, null, null, null, null, false);
             rowNumber = sheet.getLastRowNum();
             rowNumber++;
-            sheet.createFreezePane(cellPosHeader[1], rowNumber);
+            if (configurer.getColumnIndexOfFreezeArea() == 0)
+                sheet.createFreezePane(cellPosHeader[1], rowNumber);
+            else if (configurer.getColumnIndexOfFreezeArea() > 0)
+                sheet.createFreezePane(cellPosHeader[1], configurer.getColumnIndexOfFreezeArea());
         }
         if (data != null) {
             appendData(sheet, data, 0, rowNumber, null, null, null, null, tableStyle, true);
